@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class WebhookClient:
     """Async client for emitting webhook events to the TurnStay webhook-service.
 
-    Same pattern as ledger_sdk and recon_sdk: api_key + environment.
+    Follows the TurnStay pattern for authentication: api_key + environment.
 
     Usage:
         client = WebhookClient(api_key="...", environment="staging")
@@ -40,7 +40,7 @@ class WebhookClient:
     ):
         """
         Args:
-            api_key: Descope access key for Bearer auth (same as LEDGER_ADMIN_API_KEY).
+            api_key: Descope access key for Bearer auth (TurnStay auth pattern).
             environment: For URL derivation when base_url not set (e.g. "staging", "prod").
             base_url: Override for local dev (e.g. http://localhost:8000). If set, used instead of derived URL.
             timeout: HTTP request timeout in seconds.
