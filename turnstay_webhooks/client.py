@@ -15,13 +15,20 @@ logger = logging.getLogger(__name__)
 class WebhookClient:
     """Async client for emitting webhook events to the TurnStay webhook-service.
 
+    Same pattern as ledger_sdk and recon_sdk: api_key + environment.
+
     Usage:
-        client = WebhookClient(base_url="http://localhost:8000")
+        client = WebhookClient(api_key="...", environment="staging")
         await client.trigger("merchant_of_record.payment_intent.succeeded", data={...})
+
+    For local dev with base_url override:
+        client = WebhookClient(api_key="dev-token", base_url="http://localhost:8000")
     """
 
     def __init__(
         self,
+        api_key: str = "",
+        environment: str | None = None,
         base_url: str | None = None,
         timeout: float = 5.0,
         max_retries: int = 3,
@@ -33,27 +40,38 @@ class WebhookClient:
     ):
         """
         Args:
-            base_url: Webhook service URL (required for HTTP mode).
+            api_key: Descope access key for Bearer auth (same as LEDGER_ADMIN_API_KEY).
+            environment: For URL derivation when base_url not set (e.g. "staging", "prod").
+            base_url: Override for local dev (e.g. http://localhost:8000). If set, used instead of derived URL.
             timeout: HTTP request timeout in seconds.
             max_retries: Number of retries on transient failure.
             retry_delay: Base delay between retries (exponential backoff).
             mode: Transport mode - "http" or "sqs".
             queue_url: SQS queue URL (required for SQS mode).
             region_name: AWS region for SQS.
-            headers: Optional default headers sent with every HTTP request.
+            headers: Optional extra headers (Authorization is always added from api_key).
         """
+        self.api_key = api_key
         self.mode = mode
-        self.base_url = base_url
+        if base_url:
+            self.base_url = base_url.rstrip("/")
+        elif environment and mode == "http":
+            self.base_url = f"https://webhook-service.{environment.lower()}.turnstay.com"
+        else:
+            self.base_url = ""
         self.timeout = timeout
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.queue_url = queue_url
         self.region_name = region_name
-        self.headers = headers or {}
+        auth_headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        self.headers = {**(headers or {}), **auth_headers}
         self._http_client: httpx.AsyncClient | None = None
 
-        if mode == "http" and not base_url:
-            raise WebhookClientError("base_url is required for HTTP mode")
+        if mode == "http" and not self.base_url:
+            raise WebhookClientError(
+                "base_url or environment required for HTTP mode"
+            )
         if mode == "sqs" and not queue_url:
             raise WebhookClientError("queue_url is required for SQS mode")
 
